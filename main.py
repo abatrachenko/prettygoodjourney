@@ -1,5 +1,7 @@
 import io
 import time
+import requests
+import base64
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -13,6 +15,7 @@ load_dotenv()
 GOOGLE_DRIVE_FOLDER_ID = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
 OUTPUT_FOLDER_ID = os.getenv('OUTPUT_FOLDER_ID')
 GOOGLE_CREDENTIALS_FILE = os.getenv('GOOGLE_CREDENTIALS_FILE')
+
 POLL_INTERVAL = 60  # Time in seconds between folder polls
 
 # Function to split and upscale images
@@ -48,32 +51,36 @@ def save_to_google_drive(images, folder_id, credentials):
         print(f'Saved file {file.get("id")}')
     return file_ids
 
-def listen_and_process_images(main_folder_id, output_folder_id, credentials):
+def listen_and_process_images(main_folder_id, output_folder_id, to_send_printful_folder_id, credentials, private_token):
     processed_files = set()
 
     while True:
         service = build('drive', 'v3', credentials=credentials)
-        query = f"'{main_folder_id}' in parents"
 
-        results = service.files().list(q=query, fields="nextPageToken, files(id, name)").execute()
-        items = results.get('files', [])
-
-        if not items:
-            print('No files found in the folder.')
-        else:
-            for item in items:
-                file_id = item['id']
-                if file_id not in processed_files:
-                    request = service.files().get_media(fileId=file_id)
-                    file_data = io.BytesIO(request.execute())
-
-                    image = Image.open(file_data)
-                    sub_images = process_image(image)
-                    save_to_google_drive(sub_images, output_folder_id, credentials)
-
-                    processed_files.add(file_id)
+        # Listen to the main_folder_id for new images to split and upscale
+        query_main = f"'{main_folder_id}' in parents"
+        process_main_folder_images(service, query_main, output_folder_id, processed_files, credentials)
 
         time.sleep(POLL_INTERVAL)
+
+def process_main_folder_images(service, query, output_folder_id, processed_files, credentials):
+    results = service.files().list(q=query, fields="nextPageToken, files(id, name)").execute()
+    items = results.get('files', [])
+
+    if not items:
+        print('No files found in the main folder.')
+    else:
+        for item in items:
+            file_id = item['id']
+            if file_id not in processed_files:
+                request = service.files().get_media(fileId=file_id)
+                file_data = io.BytesIO(request.execute())
+
+                image = Image.open(file_data)
+                sub_images = process_image(image)
+                save_to_google_drive(sub_images, output_folder_id, credentials)
+
+                processed_files.add(file_id)
 
 def get_credentials():
     return service_account.Credentials.from_service_account_file(GOOGLE_CREDENTIALS_FILE)
@@ -81,6 +88,7 @@ def get_credentials():
 # Main function
 def main():
     credentials = get_credentials()
+    listen_and_process_images(GOOGLE_DRIVE_FOLDER_ID, OUTPUT_FOLDER_ID, credentials)
 
 if __name__ == '__main__':
     main()
