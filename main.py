@@ -29,13 +29,12 @@ def process_image(image):
     return sub_images
 
 # Function to save images to Google Drive
-def save_to_google_drive(images, folder_id, credentials):
+def save_to_google_drive(images, original_filename, folder_id, credentials):
     service = build('drive', 'v3', credentials=credentials)
-    file_ids = []
 
     for i, image in enumerate(images):
         file_metadata = {
-            'name': f'sub_image_{i}.png',
+            'name': f'{original_filename}{i+1}.png',
             'parents': [folder_id],
         }
 
@@ -46,7 +45,6 @@ def save_to_google_drive(images, folder_id, credentials):
 
         file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         print(f'Saved file {file.get("id")}')
-    return file_ids
 
 def listen_and_process_images(main_folder_id, output_folder_id, to_send_printful_folder_id, credentials, private_token):
     processed_files = set()
@@ -69,13 +67,14 @@ def process_main_folder_images(service, query, output_folder_id, processed_files
     else:
         for item in items:
             file_id = item['id']
+            file_name = item['name']
             if file_id not in processed_files:
                 request = service.files().get_media(fileId=file_id)
                 file_data = io.BytesIO(request.execute())
 
                 image = Image.open(file_data)
                 sub_images = process_image(image)
-                save_to_google_drive(sub_images, output_folder_id, credentials)
+                save_to_google_drive(sub_images, file_name, output_folder_id, credentials)
 
                 processed_files.add(file_id)
 
