@@ -1,12 +1,9 @@
 import io
 import time
-import requests
-import base64
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
-from PIL import Image, ImageOps
+from googleapiclient.http import MediaIoBaseUpload
+from PIL import Image
 import os
 from dotenv import load_dotenv
 
